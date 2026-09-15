@@ -16,7 +16,10 @@
       <span>Nurses: <b id="nurseCount">1</b></span>
       <span>Guards: <b id="guardCount">0</b></span>
       <span>Caught: <b id="caught">0</b></span>
+      <span>Level Time: <b id="levelTimer">0:00</b></span>
+      <span>Total Time: <b id="totalTimer">0:00</b></span>
     </div>
+    <div id="powerupBar"><span id="powerupLabel"></span></div>
     <canvas id="game"></canvas>
     <div id="hitFlash"></div>
     <div id="catchDialog"></div>
@@ -28,9 +31,43 @@
           <b>Move:</b> Arrow keys or WASD.<br>
           <b>Goal:</b> Catch every nurse on the ward to advance to the next level.<br>
           <b>Portals:</b> Walk off any edge to tunnel out the opposite side.<br>
-          <b>Danger:</b> Security guards join the patrol starting level 2, one more each level after. They send you back to bed if they catch you — you've got 3 lives.
+          <b>Danger:</b> Security guards join the patrol starting level 2, one more each level after. They send you back to bed if they catch you — you've got 3 lives.<br>
+          <b>Power-ups:</b> Starting level 3, pick one each level (Patient Coding, Decoy, Meth, New Doctor, or Extra Life) — press E to use it.
         </p>
         <button id="startBtn">Start</button>
+      </div>
+    </div>
+    <div id="powerupOverlay" class="hidden">
+      <div id="powerupBox">
+        <h2>Choose a Power-Up</h2>
+        <p class="sub">One pick, good for this level only. Press E to activate it once you're in.</p>
+        <div id="powerupChoices">
+          <button class="powerupChoice" data-powerup="coding">
+            <span class="picon">🚨</span>
+            <span class="pname">Patient Coding</span>
+            <span class="pdesc">Every nurse rushes to the nurses' station for 6s</span>
+          </button>
+          <button class="powerupChoice" data-powerup="decoy">
+            <span class="picon">🎭</span>
+            <span class="pname">Decoy</span>
+            <span class="pdesc">Guards flee from you for 6s</span>
+          </button>
+          <button class="powerupChoice" data-powerup="meth">
+            <span class="picon">⚡</span>
+            <span class="pname">Meth</span>
+            <span class="pdesc">Double movement speed for 6s</span>
+          </button>
+          <button class="powerupChoice" data-powerup="doctor">
+            <span class="picon">🩺</span>
+            <span class="pname">New Doctor</span>
+            <span class="pdesc">Nearby nurses are drawn to you for 6s</span>
+          </button>
+          <button class="powerupChoice" data-powerup="life">
+            <span class="picon">❤️</span>
+            <span class="pname">Extra Life</span>
+            <span class="pdesc">+1 life, applied instantly</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

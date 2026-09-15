@@ -191,6 +191,11 @@ const sfx = {
   levelUp: () => {
     [400, 500, 600, 700, 900].forEach((f, i) => setTimeout(() => beep({ freq: f, duration: 0.12, type: 'square', gain: 0.08 }), i * 90));
   },
+  powerupPick: () => beep({ freq: 500, duration: 0.08, type: 'triangle', gain: 0.07, slideTo: 750 }),
+  powerupActivate: () => {
+    beep({ freq: 400, duration: 0.15, type: 'square', gain: 0.09, slideTo: 1000 });
+    setTimeout(() => beep({ freq: 800, duration: 0.1, type: 'triangle', gain: 0.07 }), 80);
+  },
 };
 
 const DIRS = {
@@ -287,7 +292,15 @@ class Nurse extends Entity {
     if (this.tick % this.speed !== 0) return;
     const atIntersection = countOpenDirs(this.col, this.row) > 2 || (this.dir[0] === 0 && this.dir[1] === 0);
     if (atIntersection || !this.canMove(this.dir[0], this.dir[1])) {
-      this.dir = chooseFleeDir(this, target);
+      if (codingActive) {
+        // Patient Coding power-up: every nurse rushes to the same rally point
+        this.dir = chooseChaseDir(this, codingTarget);
+      } else if (doctorActive && Math.hypot(this.col - target.col, this.row - target.row) <= DOCTOR_RADIUS) {
+        // New Doctor power-up: nurses within range are drawn to the player
+        this.dir = chooseChaseDir(this, target);
+      } else {
+        this.dir = chooseFleeDir(this, target);
+      }
     }
     if (this.canMove(this.dir[0], this.dir[1])) {
       this.col += this.dir[0];
@@ -364,7 +377,8 @@ class Guard extends Entity {
     if (this.tick % this.speed !== 0) return;
     const atIntersection = countOpenDirs(this.col, this.row) > 2 || (this.dir[0] === 0 && this.dir[1] === 0);
     if (atIntersection || !this.canMove(this.dir[0], this.dir[1])) {
-      this.dir = chooseChaseDir(this, target);
+      // Decoy power-up: guards flee from the player instead of chasing
+      this.dir = guardsFleeing ? chooseFleeDir(this, target) : chooseChaseDir(this, target);
     }
     if (this.canMove(this.dir[0], this.dir[1])) {
       this.col += this.dir[0];
@@ -374,8 +388,102 @@ class Guard extends Entity {
   }
 }
 
+// --- Power-ups: one pick per level, activated with E, good only for that level ---
+const POWERUPS = [
+  { id: 'coding', name: 'Patient Coding' },
+  { id: 'decoy', name: 'Decoy' },
+  { id: 'meth', name: 'Meth' },
+  { id: 'doctor', name: 'New Doctor' },
+  { id: 'life', name: 'Extra Life' },
+];
+const POWERUP_DURATION = 6; // seconds
+const POWERUP_UNLOCK_LEVEL = 3; // picker starts appearing on this level
+const DOCTOR_RADIUS = 6; // tiles — New Doctor only attracts nearby nurses
+
+function activatePowerup(id) {
+  if (id === 'coding') {
+    codingActive = true;
+    codingTarget = nurseSpawn; // rally point every nurse rushes toward
+    for (const n of nurses) n.dir = chooseChaseDir(n, codingTarget);
+  }
+  if (id === 'decoy') {
+    guardsFleeing = true;
+    // instantly scatter every guard away from the player, already heading
+    // away rather than waiting for the next intersection to reconsider
+    for (const g of guards) {
+      const tile = pickFarTile(player.col, player.row);
+      g.col = tile.col;
+      g.row = tile.row;
+      g.dir = [0, 0];
+      g.dir = chooseFleeDir(g, player);
+    }
+  }
+  if (id === 'meth') methActive = true;
+  if (id === 'doctor') doctorActive = true;
+  activePowerup = id;
+  powerupTimeLeft = POWERUP_DURATION;
+  chosenPowerup = null;
+  sfx.powerupActivate();
+  updatePowerupBar();
+}
+
+function deactivatePowerup() {
+  activePowerup = null;
+  powerupTimeLeft = 0;
+  codingActive = false;
+  codingTarget = null;
+  guardsFleeing = false;
+  methActive = false;
+  doctorActive = false;
+  updatePowerupBar();
+}
+
+function selectPowerup(id) {
+  if (id === 'life') {
+    lives += 1;
+    updateHud();
+  } else {
+    chosenPowerup = id;
+  }
+  sfx.powerupPick();
+  hidePowerupOverlay();
+  awaitingPowerup = false;
+  updatePowerupBar();
+}
+
+function showPowerupPicker() {
+  document.getElementById('powerupOverlay').classList.remove('hidden');
+  awaitingPowerup = true;
+}
+function hidePowerupOverlay() {
+  document.getElementById('powerupOverlay').classList.add('hidden');
+}
+
+function updatePowerupBar() {
+  const el = document.getElementById('powerupLabel');
+  if (activePowerup) {
+    const p = POWERUPS.find(p => p.id === activePowerup);
+    el.textContent = `${p.name} active: ${Math.max(0, powerupTimeLeft).toFixed(1)}s`;
+    el.classList.add('active');
+  } else if (chosenPowerup) {
+    const p = POWERUPS.find(p => p.id === chosenPowerup);
+    el.textContent = `${p.name} ready — press E to activate`;
+    el.classList.remove('active');
+  } else {
+    el.textContent = '';
+    el.classList.remove('active');
+  }
+}
+
+document.querySelectorAll('.powerupChoice').forEach(btn => {
+  btn.addEventListener('click', () => selectPowerup(btn.dataset.powerup));
+});
+
 // --- Game state ---
 let player, nurses, guards, score, caught, lives, running, gameOver, invulnTicks, shakeTicks;
+let codingActive, codingTarget, guardsFleeing, methActive, doctorActive;
+let chosenPowerup, activePowerup, powerupTimeLeft, awaitingPowerup;
+let levelTime, totalTime;
 
 function resetGame() {
   guards = [];
@@ -385,6 +493,7 @@ function resetGame() {
   level = 1;
   invulnTicks = 0;
   shakeTicks = 0;
+  totalTime = 0;
   running = true;
   gameOver = false;
   startLevel();
@@ -447,6 +556,25 @@ function startLevel() {
     );
     usedTiles.push(tile);
     nurses.push(new Nurse(tile.col, tile.row, Math.max(3, 8 - Math.floor((level - 1) / 2))));
+  }
+
+  levelTime = 0;
+  chosenPowerup = null;
+  activePowerup = null;
+  powerupTimeLeft = 0;
+  codingActive = false;
+  codingTarget = null;
+  guardsFleeing = false;
+  methActive = false;
+  doctorActive = false;
+  updatePowerupBar();
+
+  // power-ups unlock once the player has cleared the first few easy levels
+  if (level >= POWERUP_UNLOCK_LEVEL) {
+    showPowerupPicker();
+  } else {
+    hidePowerupOverlay();
+    awaitingPowerup = false;
   }
 }
 
@@ -613,6 +741,11 @@ window.addEventListener('keydown', (e) => {
   if (DIRS[e.key]) {
     player.nextDir = DIRS[e.key];
     e.preventDefault();
+    return;
+  }
+  if ((e.key === 'e' || e.key === 'E') && chosenPowerup && !activePowerup && !awaitingPowerup) {
+    activatePowerup(chosenPowerup);
+    e.preventDefault();
   }
 });
 
@@ -636,24 +769,55 @@ function loop(ts) {
   lastFrameTs = ts;
   updateConfetti(dt);
   if (shakeTicks > 0) shakeTicks--;
-  if (ts - lastTick >= TICK_MS) {
-    lastTick = ts;
-    update();
+
+  if (!awaitingPowerup) {
+    levelTime += dt;
+    totalTime += dt;
+    if (activePowerup) {
+      powerupTimeLeft -= dt;
+      if (powerupTimeLeft <= 0) deactivatePowerup();
+      else updatePowerupBar();
+    }
+    if (ts - lastTick >= TICK_MS) {
+      lastTick = ts;
+      update();
+    }
   }
+  updateTimerDisplay();
   render();
   if (running) requestAnimationFrame(loop);
 }
 
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+function updateTimerDisplay() {
+  document.getElementById('levelTimer').textContent = formatTime(levelTime);
+  document.getElementById('totalTimer').textContent = formatTime(totalTime);
+}
+
 function update() {
+  const playerPrevCol = player.col, playerPrevRow = player.row;
   player.step();
+  if (methActive) player.step(); // double movement speed for the duration
   if (invulnTicks > 0) invulnTicks--;
 
+  // capture pre-step positions so we can also catch a same-tick swap (player
+  // and a nurse/guard crossing paths and passing through each other) —
+  // checking only the post-step tiles misses that case entirely
+  const nursePrev = nurses.map(n => ({ n, col: n.col, row: n.row }));
   for (const n of nurses) n.step(player);
+  const guardPrev = guards.map(g => ({ g, col: g.col, row: g.row }));
   for (const g of guards) g.step(player);
 
   const caughtNow = [];
-  for (const n of nurses) {
-    if (n.col === player.col && n.row === player.row) caughtNow.push(n);
+  for (const { n, col, row } of nursePrev) {
+    const samePos = n.col === player.col && n.row === player.row;
+    const swapped = n.col === playerPrevCol && n.row === playerPrevRow && player.col === col && player.row === row;
+    if (samePos || swapped) caughtNow.push(n);
   }
   if (caughtNow.length) {
     for (const n of caughtNow) {
@@ -672,7 +836,11 @@ function update() {
   }
 
   if (invulnTicks === 0) {
-    const guardHit = guards.some(g => g.col === player.col && g.row === player.row);
+    const guardHit = guardPrev.some(({ g, col, row }) => {
+      const samePos = g.col === player.col && g.row === player.row;
+      const swapped = g.col === playerPrevCol && g.row === playerPrevRow && player.col === col && player.row === row;
+      return samePos || swapped;
+    });
     if (guardHit) {
       lives -= 1;
       sfx.hit();
@@ -957,6 +1125,7 @@ showOverlay(
   "<b>Move:</b> Arrow keys or WASD.<br>" +
   "<b>Goal:</b> Catch every nurse on the ward to advance to the next level.<br>" +
   "<b>Portals:</b> Walk off any edge to tunnel out the opposite side.<br>" +
-  "<b>Danger:</b> Security guards join the patrol starting level 2, one more each level after. They send you back to bed if they catch you — you've got 3 lives.",
+  "<b>Danger:</b> Security guards join the patrol starting level 2, one more each level after. They send you back to bed if they catch you — you've got 3 lives.<br>" +
+  "<b>Power-ups:</b> Starting level 3, pick one each level (Patient Coding, Decoy, Meth, New Doctor, or Extra Life) — press E to use it.",
   'Start'
 );
