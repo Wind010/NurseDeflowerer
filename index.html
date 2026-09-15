@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nurse Deflowerer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="sakura"></div>
+  <div id="wrap">
+    <h1>Nurse Deflowerer</h1>
+    <div id="hud">
+      <span>Score: <b id="score">0</b></span>
+      <span>Level: <b id="level">1</b></span>
+      <span>Lives: <b id="lives">3</b></span>
+      <span>Nurses: <b id="nurseCount">1</b></span>
+      <span>Guards: <b id="guardCount">0</b></span>
+      <span>Caught: <b id="caught">0</b></span>
+    </div>
+    <canvas id="game"></canvas>
+    <div id="hitFlash"></div>
+    <div id="catchDialog"></div>
+    <div id="overlay">
+      <div id="overlayBox">
+        <h2 id="overlayTitle">Nurse Deflowerer</h2>
+        <p id="overlayMsg">
+          Go hog wild — find those nurses!<br><br>
+          <b>Move:</b> Arrow keys or WASD.<br>
+          <b>Goal:</b> Catch every nurse on the ward to advance to the next level.<br>
+          <b>Portals:</b> Walk off any edge to tunnel out the opposite side.<br>
+          <b>Danger:</b> Security guards join the patrol starting level 2, one more each level after. They send you back to bed if they catch you — you've got 3 lives.
+        </p>
+        <button id="startBtn">Start</button>
+      </div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
